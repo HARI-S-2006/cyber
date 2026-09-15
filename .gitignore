@@ -1,0 +1,65 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+venv/
+env/
+.env
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Models
+models/*.pkl
+models/*.onnx
+models/*.joblib
+
+# Data
+data/
+*.pcap
+*.pcapng
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# Docker
+.docker/
+
+# Testing
+.coverage
+.pytest_cache/
+htmlcov/
+
+# Redis
+dump.rdb
+
+# IDE
+*.pyc
+__pycache__/
+*.egg-info/
+dist/
+build/
+
+# Environment
+.env.local
+.env.*.local
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*

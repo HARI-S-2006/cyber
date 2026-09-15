@@ -1,0 +1,44 @@
+# Core - use versions compatible with Python 3.11+
+fastapi>=0.115.0
+uvicorn[standard]>=0.32.0
+redis>=5.2.0
+pydantic>=2.9.0
+pydantic-settings>=2.5.0
+python-dotenv>=1.0.0
+
+# Message Broker - Kafka (primary) + Redis (fallback)
+aiokafka>=0.10.0
+kafka-python>=2.0.2
+redis>=5.2.0
+
+# Packet Capture
+scapy>=2.6.0
+
+# ML - use versions with Python 3.11+ wheels
+scikit-learn>=1.5.0
+numpy>=2.0.0
+pandas>=2.2.0
+joblib>=1.4.0
+
+# Optional ML (install if needed)
+# lightgbm>=4.3.0
+# onnx>=1.15.0
+# onnxmltools>=1.15.0
+# skl2onnx>=1.15.0
+
+# GeoIP
+geoip2>=4.8.0
+requests>=2.31.0
+
+# Utils
+asyncio-redis>=0.16.0
+aiofiles>=23.2.0
+orjson>=3.10.0
+
+# Testing
+pytest>=8.0.0
+pytest-asyncio>=0.23.0
+httpx>=0.27.0
+
+# eBPF (Linux only, optional)
+# bcc>=0.29.0
