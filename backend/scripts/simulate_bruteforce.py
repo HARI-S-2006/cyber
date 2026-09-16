@@ -272,6 +272,18 @@ class BruteForceSimulator:
         }
 
 
+def is_admin() -> bool:
+    """Check if running with admin/root privileges."""
+    try:
+        if sys.platform == "win32":
+            import ctypes
+            return ctypes.windll.shell32.IsUserAnAdmin()
+        else:
+            return os.geteuid() == 0
+    except:
+        return False
+
+
 async def main():
     parser = argparse.ArgumentParser(description='Brute Force Attack Simulator')
     parser.add_argument('--target', required=True, help='Target IP address')
@@ -283,9 +295,10 @@ async def main():
     
     args = parser.parse_args()
     
-    if os.geteuid() != 0:
-        print("[!] Warning: Packet sending requires root privileges")
-        print("    Run with: sudo python simulate_bruteforce.py ...")
+    if not is_admin():
+        print("[!] Warning: Packet sending requires Administrator/root privileges")
+        print("    On Windows: Run PowerShell as Administrator")
+        print("    On Linux: Run with sudo")
         return
     
     simulator = BruteForceSimulator(args.target, args.service)

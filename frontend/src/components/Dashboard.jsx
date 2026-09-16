@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react'
 import { useStore, useFilteredFlows, useFilteredAnomalies } from '../hooks/useStore'
 import { useWebSocket } from '../hooks/useWebSocket'
-import GlobeScene from '../scenes/GlobeScene'
+import { GlobeScene } from './globe/GlobeScene'
 import StatsPanel from './StatsPanel'
 import FlowTable from './FlowTable'
 import AnomalyPanel from './AnomalyPanel'

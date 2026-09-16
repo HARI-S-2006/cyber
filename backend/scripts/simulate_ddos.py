@@ -176,6 +176,18 @@ async def simulate_normal_traffic(target_ip: str, duration: int = 60) -> None:
     print(f"[+] Normal traffic simulation completed. Packets: {packet_count}")
 
 
+def is_admin() -> bool:
+    """Check if running with admin/root privileges."""
+    try:
+        if sys.platform == "win32":
+            import ctypes
+            return ctypes.windll.shell32.IsUserAnAdmin()
+        else:
+            return os.geteuid() == 0
+    except:
+        return False
+
+
 async def main():
     parser = argparse.ArgumentParser(description='DDoS Attack Simulator for Cyber Threat Visualizer')
     parser.add_argument('--target', required=True, help='Target IP address')
@@ -186,11 +198,11 @@ async def main():
     
     args = parser.parse_args()
     
-    # Check for root privileges
-    import os
-    if os.geteuid() != 0:
-        print("[!] Warning: Packet sending requires root privileges")
-        print("    Run with: sudo python simulate_ddos.py ...")
+    # Check for admin/root privileges
+    if not is_admin():
+        print("[!] Warning: Packet sending requires Administrator/root privileges")
+        print("    On Windows: Run PowerShell as Administrator")
+        print("    On Linux: Run with sudo")
         return
     
     simulator = DDoSSimulator(args.target, args.port, args.rate)

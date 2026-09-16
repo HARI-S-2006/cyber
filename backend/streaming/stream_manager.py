@@ -35,18 +35,19 @@ except ImportError:
 # Import unified message broker
 from backend.utils.kafka_client import (
     message_broker, UnifiedMessageBroker, BrokerConfig, MessageBrokerType,
-    get_broker_config, AnomalyDetectionService
+    get_broker_config
 )
+from backend.ml.model import AnomalyDetectionService
 
 # Import other components
 from backend.ml.model import anomaly_detector, detection_service
-from backend.sniffer.feature_extractor import FeatureExtractionEngine
+from backend.features.feature_extractor import FeatureExtractionEngine
 
 
 @dataclass
 class StreamConfig:
     # Message broker config
-    broker_type: str = "kafka"  # "kafka" or "redis"
+    broker_type: str = "redis"  # "kafka" or "redis"
     kafka_bootstrap_servers: str = "localhost:9092"
     kafka_consumer_group: str = "threat-visualizer"
     redis_url: str = "redis://localhost:6379"

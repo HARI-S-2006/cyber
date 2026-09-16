@@ -305,6 +305,7 @@ class UnifiedMessageBroker:
                 encoding="utf-8",
                 decode_responses=True,
                 max_connections=20,
+                protocol=2,  # Force RESP2 to avoid HELLO command issues
             )
             await self.redis.ping()
             logger.info(f"Connected to Redis at {self.config.redis_url}")

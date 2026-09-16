@@ -22,7 +22,7 @@ function createArcGeometry(
   end: THREE.Vector3,
   height: number = ARC_HEIGHT,
   color: THREE.Color = new THREE.Color(0x39FF14)
-): THREE.Mesh {
+): THREE.Line {
   const mid = new THREE.Vector3().addVectors(start, end).multiplyScalar(0.5)
   const midLength = mid.length()
   mid.normalize().multiplyScalar(EARTH_RADIUS + height)
@@ -53,47 +53,7 @@ function ThreatArc({
   progress: number
   intensity: number
 }) {
-  const startRef = useRef<THREE.Vector3>(latLonToVector3(startLat, startLon))
-  const endRef = useRef<THREE.Vector3>(latLonToVector3(endLat, endLon))
-  const lineRef = useRef<THREE.Line | null>(null)
-  const progressRef = useRef(progress)
-  
-  useEffect(() => {
-    progressRef.current = progress
-  }, [progress])
-  
-  useFrame(() => {
-    if (!lineRef.current) return
-    
-    const p = progressRef.current
-    if (p <= 0 || p >= 1) return
-    
-    const start = startRef.current
-    const end = endRef.current
-    
-    const mid = new THREE.Vector3().addVectors(start, end).multiplyScalar(0.5)
-    const midLength = mid.length()
-    mid.normalize().multiplyScalar(EARTH_RADIUS + ARC_HEIGHT * intensity)
-    
-    const curve = new THREE.QuadraticBezierCurve3(start, mid, end)
-    const points = curve.getPoints(32)
-    
-    const geometry = lineRef.current.geometry as THREE.BufferGeometry
-    const positions = geometry.attributes.position.array
-    
-    for (let i = 0; i <= 32; i++) {
-      const t = i / 32
-      if (t <= p) {
-        positions[i * 3] = points[i].x
-        positions[i * 3 + 1] = points[i].y
-        positions[i * 3 + 2] = points[i].z
-      } else {
-        positions[i * 3] = positions[i * 3 + 1] = positions[i * 3 + 2] = 0
-      }
-    }
-    
-    geometry.attributes.position.needsUpdate = true
-  })
+  const lineRef = useRef<THREE.Line<THREE.BufferGeometry, THREE.LineBasicMaterial> | null>(null)
   
   const start = useMemo(() => latLonToVector3(startLat, startLon), [startLat, startLon])
   const end = useMemo(() => latLonToVector3(endLat, endLon), [endLat, endLon])
@@ -118,9 +78,35 @@ function ThreatArc({
     linewidth: 2,
   }), [color, intensity])
   
-  return (
-    <line ref={lineRef} geometry={geometry} material={material} />
-  )
+  // Initialize the line
+  useEffect(() => {
+    if (!lineRef.current) {
+      lineRef.current = new THREE.Line(geometry, material)
+    }
+  }, [])
+  
+  // Animate the line progress
+  useFrame(({ clock }) => {
+    if (!lineRef.current) return
+    
+    const p = Math.min(1, (clock.getElapsedTime() * 0.5) % 1)
+    const positions = geometry.attributes.position.array
+    
+    for (let i = 0; i <= 32; i++) {
+      const t = i / 32
+      if (t <= p) {
+        positions[i * 3] = points[i].x
+        positions[i * 3 + 1] = points[i].y
+        positions[i * 3 + 2] = points[i].z
+      } else {
+        positions[i * 3] = positions[i * 3 + 1] = positions[i * 3 + 2] = 0
+      }
+    }
+    
+    geometry.attributes.position.needsUpdate = true
+  })
+  
+  return lineRef.current ? <primitive object={lineRef.current} /> : null
 }
 
 function ParticleField() {
@@ -128,7 +114,6 @@ function ParticleField() {
   const count = 2000
   
   useEffect(() => {
-    const geometry = new THREE.BufferGeometry()
     const positions = new Float32Array(count * 3)
     const sizes = new Float32Array(count)
     const colors = new Float32Array(count * 3)
@@ -189,18 +174,22 @@ function ParticleField() {
     
     particlesRef.current.geometry.attributes.position.needsUpdate = true
     particlesRef.current.geometry.attributes.alpha.needsUpdate = true
-    particlesRef.current.material.opacity = 0.6
+    const mat = particlesRef.current.material as THREE.PointsMaterial
+    mat.opacity = 0.6
   })
   
   return <points ref={particlesRef} />
 }
 
 function Earth() {
-  const earthRef = useRef<THREE.Mesh | null>(null)
+  const earthRef = useRef<THREE.Mesh<THREE.SphereGeometry, THREE.MeshStandardMaterial> | null>(null)
   const atmosphereRef = useRef<THREE.Mesh | null>(null)
   
   useEffect(() => {
     const loader = new THREE.TextureLoader()
+    const onError = (err: ErrorEvent) => {
+      console.warn('Texture failed to load:', err)
+    }
     
     loader.load('/textures/earth_day.jpg', (texture) => {
       texture.colorSpace = THREE.SRGBColorSpace
@@ -208,7 +197,7 @@ function Earth() {
         earthRef.current.material.map = texture
         earthRef.current.material.needsUpdate = true
       }
-    })
+    }, undefined, onError)
     
     loader.load('/textures/earth_night.jpg', (texture) => {
       texture.colorSpace = THREE.SRGBColorSpace
@@ -218,16 +207,16 @@ function Earth() {
         earthRef.current.material.emissiveIntensity = 0.5
         earthRef.current.material.needsUpdate = true
       }
-    })
+    }, undefined, onError)
     
     loader.load('/textures/earth_specular.jpg', (texture) => {
       texture.colorSpace = THREE.SRGBColorSpace
       if (earthRef.current) {
-        earthRef.current.material.specularMap = texture
-        earthRef.current.material.specular = new THREE.Color(0x111133)
+        // For MeshStandardMaterial, use roughnessMap instead of specularMap
+        earthRef.current.material.roughnessMap = texture
         earthRef.current.material.needsUpdate = true
       }
-    })
+    }, undefined, onError)
     
     loader.load('/textures/earth_clouds.jpg', (texture) => {
       texture.colorSpace = THREE.SRGBColorSpace
@@ -245,7 +234,7 @@ function Earth() {
         })
       )
       earthRef.current?.add(cloudMesh)
-    })
+    }, undefined, onError)
     
     return () => {}
   }, [])

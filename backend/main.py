@@ -194,12 +194,9 @@ def main():
     if args.api_only:
         print("Starting API server only...")
         import uvicorn
-        from streaming.stream_manager import create_app, RedisStreamManager, ThreatAggregator, StreamConfig
+        from streaming.stream_manager import create_app
         
-        config = StreamConfig()
-        stream_manager = RedisStreamManager(config)
-        aggregator = ThreatAggregator()
-        app = create_app(stream_manager, aggregator)
+        app = create_app()
         
         uvicorn.run(app, host=args.api_host, port=args.api_port, log_level="info")
         return

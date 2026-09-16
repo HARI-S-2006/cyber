@@ -3,11 +3,11 @@ import { useStore } from '../../hooks/useStore'
 export function ThreatMatrix() {
   const { threats } = useStore()
   
-  const threatTypes = threats.reduce((acc, t) => {
+  const threatTypes = threats.reduce((acc: Record<string, number>, t: any) => {
     const type = t.threat_type || 'UNKNOWN'
     acc[type] = (acc[type] || 0) + 1
     return acc
-  }, {} as Record<string, number>)
+  }, {})
   
   const sortedTypes = Object.entries(threatTypes)
     .sort((a, b) => b[1] - a[1])
@@ -22,9 +22,7 @@ export function ThreatMatrix() {
             NO THREATS CLASSIFIED
           </div>
         ) : (
-          Object.entries(
-            Object.fromEntries(sortedTypes)
-          ).map(([type, count]) => (
+          sortedTypes.map(([type, count]) => (
             <div key={type} className="group">
               <div className="flex items-center justify-between mb-1">
                 <span className="font-mono text-xs text-cyber-textDim">{type}</span>

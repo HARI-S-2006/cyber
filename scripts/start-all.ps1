@@ -3,7 +3,7 @@
     Starts all Cyber Threat Visualizer services in the correct order
 .DESCRIPTION
     Opens 4 separate PowerShell windows in sequence:
-    1. Redis (Docker)
+    1. Docker Infrastructure Monitor (Redis, Zookeeper, Kafka)
     2. Backend API (FastAPI + ML)
     3. Packet Sniffer (Scapy fallback)
     4. Frontend (React + Vite + Three.js)
@@ -25,6 +25,11 @@ Write-Host "   CYBER THREAT VISUALIZER - WINDOWS STARTUP (PowerShell)" -Foregrou
 Write-Host "============================================================"
 Write-Host ""
 
+# Resolve project root dynamically
+$ProjectRoot = Split-Path -Parent $PSScriptRoot
+Write-Host "[INFO] Project Root: $ProjectRoot" -ForegroundColor Yellow
+Write-Host ""
+
 # Check Docker
 Write-Host "[INFO] Checking Docker..." -ForegroundColor Yellow
 try {
@@ -42,129 +47,182 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 Write-Host "[OK] Docker daemon running" -ForegroundColor Green
-
-# Start infrastructure services
 Write-Host ""
-Write-Host "[INFO] Starting infrastructure services (Redis, Kafka, Zookeeper)..." -ForegroundColor Yellow
-docker-compose up -d redis zookeeper kafka
 
-Write-Host "[INFO] Waiting for services to be healthy..." -ForegroundColor Yellow
-Start-Sleep -Seconds 10
+# Check Python
+Write-Host "[INFO] Checking Python..." -ForegroundColor Yellow
+$pythonPath = "$ProjectRoot\backend\.venv\Scripts\python.exe"
+if (-not (Test-Path $pythonPath)) {
+    Write-Host "[INFO] Python virtual environment not found. Will be created by backend script." -ForegroundColor Yellow
+} else {
+    $pyVersion = & $pythonPath --version
+    Write-Host "[OK] Python: $pyVersion" -ForegroundColor Green
+}
 
-# Verify Redis
-Write-Host "[INFO] Verifying Redis..." -ForegroundColor Yellow
-$redisOk = $false
-for ($i = 1; $i -le 10; $i++) {
-    if (redis-cli ping 2>$null | Select-String -Pattern "PONG") {
-        Write-Host "[OK] Redis is ready" -ForegroundColor Green
-        $redisOk = $true
-        break
+# Check Node.js
+Write-Host "[INFO] Checking Node.js..." -ForegroundColor Yellow
+try {
+    $nodeVersion = node --version
+    Write-Host "[OK] Node.js: $nodeVersion" -ForegroundColor Green
+} catch {
+    Write-Error "Node.js not found. Install from https://nodejs.org"
+    exit 1
+}
+Write-Host ""
+
+Write-Host "============================================================" -ForegroundColor Cyan
+Write-Host "   LAUNCHING 4 SERVICE WINDOWS" -ForegroundColor Cyan
+Write-Host "============================================================" -ForegroundColor Cyan
+Write-Host ""
+
+# Clean up any existing project Docker resources first
+Write-Host "[INFO] Cleaning up any existing project Docker resources..." -ForegroundColor Yellow
+docker compose down -v 2>$null
+Write-Host "[OK] Cleaned up" -ForegroundColor Green
+Write-Host ""
+
+# WINDOW 1: Docker Infrastructure Monitor
+Write-Host "[1/4] Launching Docker Infrastructure Monitor..." -ForegroundColor Yellow
+$infraScript = "$ProjectRoot\scripts\start-infrastructure.ps1"
+if (-not (Test-Path $infraScript)) {
+    Write-Error "Infrastructure script not found: $infraScript"
+    exit 1
+}
+Start-Process powershell -ArgumentList "-NoExit", "-Command", "& '$infraScript'" -WindowStyle Normal
+
+Write-Host "[INFO] Waiting for infrastructure to become healthy..." -ForegroundColor Yellow
+
+# Wait for infrastructure to be healthy (Redis, Zookeeper, Kafka)
+$maxWait = 180
+$elapsed = 0
+$infraReady = $false
+
+while ($elapsed -lt $maxWait -and -not $infraReady) {
+    $containers = docker ps --filter "name=cyber-threat-" --format "{{.Status}}"
+    $allHealthy = $true
+    $runningCount = 0
+    
+    if ($containers) {
+        foreach ($status in $containers) {
+            $runningCount++
+            if ($status -notlike "*healthy*") {
+                $allHealthy = $false
+                break
+            }
+        }
     }
-    Start-Sleep -Seconds 1
-}
-if (-not $redisOk) { Write-Error "Redis failed to start"; exit 1 }
-
-# Verify Kafka
-$kafkaOk = $false
-for ($i = 1; $i -le 15; $i++) {
-    if (docker exec kafka kafka-broker-api-versions --bootstrap-server localhost:9092 2>$null) {
-        Write-Host "[OK] Kafka is ready" -ForegroundColor Green
-        $kafkaOk = $true
-        break
+    
+    if ($allHealthy -and $runningCount -ge 3) {
+        $infraReady = $true
     }
-    Start-Sleep -Seconds 2
-}
-if (-not $kafkaOk) { Write-Warning "Kafka not ready yet, continuing anyway..." }
-
-# Setup Python environment
-Write-Host ""
-Write-Host "[INFO] Setting up Python environment..." -ForegroundColor Yellow
-Set-Location "C:\Users\shari\cyber-threat-visualizer\backend"
-if (-not (Test-Path ".venv")) {
-    Write-Host "[INFO] Creating virtual environment..." -ForegroundColor Yellow
-    python -m venv .venv
-}
-& .venv\Scripts\Activate.ps1
-pip install -q -r requirements.txt 2>$null
-Write-Host "[OK] Python dependencies ready" -ForegroundColor Green
-
-# Install Node dependencies
-Write-Host ""
-Write-Host "[INFO] Installing Node.js dependencies..." -ForegroundColor Yellow
-Set-Location "C:\Users\shari\cyber-threat-visualizer\frontend"
-if (-not (Test-Path "node_modules")) {
-    npm install --silent 2>$null
-}
-Write-Host "[OK] Node.js dependencies ready" -ForegroundColor Green
-
-Write-Host ""
-Write-Host "[INFO] Building frontend..." -ForegroundColor Yellow
-npm run build 2>$null
-Write-Host "[OK] Frontend built" -ForegroundColor Green
-
-# Train ML model if needed
-if (-not (Test-Path "C:\Users\shari\cyber-threat-visualizer\backend\ml\models\anomaly_detector.pkl")) {
-    Write-Host "[INFO] Training ML model..." -ForegroundColor Yellow
-    Set-Location "C:\Users\shari\cyber-threat-visualizer\backend"
-    $env:PYTHONPATH = "C:\Users\shari\cyber-threat-visualizer"
-    python -c "
-from ml.model import AnomalyDetector, ModelConfig, generate_synthetic_data
-from pathlib import Path
-detector = AnomalyDetector(ModelConfig())
-X, y = generate_synthetic_data(5000, 0.05)
-detector.fit(X)
-Path('ml/models').mkdir(parents=True, exist_ok=True)
-detector.save('ml/models/anomaly_detector.pkl')
-print('Model trained and saved')
-"
-    Write-Host "[OK] ML model trained" -ForegroundColor Green
+    
+    if (-not $infraReady) {
+        Write-Host "  Waiting for infrastructure health checks... ($elapsed/${maxWait}s) - $runningCount/3 containers running" -ForegroundColor Yellow
+        Start-Sleep -Seconds 5
+        $elapsed += 5
+    }
 }
 
+if ($infraReady) {
+    Write-Host "[OK] Infrastructure is healthy!" -ForegroundColor Green
+} else {
+    Write-Warning "Infrastructure health check timeout. Continuing anyway..."
+}
 Write-Host ""
-Write-Host "[INFO] Starting application services..." -ForegroundColor Yellow
 
-# 1. Backend API
-Write-Host "[1/3] Starting Backend API on http://localhost:8000..." -ForegroundColor Yellow
-$backendCmd = "cd C:\Users\shari\cyber-threat-visualizer\backend; . .venv\Scripts\Activate.ps1; python -m backend.api.main"
-Start-Process powershell -ArgumentList "-NoExit", "-Command", $backendCmd -Verb RunAs
+# WINDOW 2: Backend API
+Write-Host "[2/4] Launching Backend API..." -ForegroundColor Yellow
+$backendScript = "$ProjectRoot\scripts\start-backend.ps1"
+if (-not (Test-Path $backendScript)) {
+    Write-Error "Backend script not found: $backendScript"
+    exit 1
+}
+Start-Process powershell -ArgumentList "-NoExit", "-Command", "& '$backendScript'" -WindowStyle Normal
 
 # Wait for backend to start
-Start-Sleep -Seconds 5
-$backendOk = $false
-for ($i = 1; $i -le 10; $i++) {
+Write-Host "[INFO] Waiting for Backend API to start..." -ForegroundColor Yellow
+$backendReady = $false
+for ($i = 1; $i -le 30; $i++) {
     try {
-        $response = Invoke-RestMethod -Uri "http://localhost:8000/api/v1/stats" -ErrorAction Stop
-        if ($LASTEXITCODE -eq 0) { $backendOk = $true; break }
+        $response = Invoke-RestMethod -Uri "http://localhost:8000/health" -ErrorAction Stop -TimeoutSec 2
+        if ($response.status -eq "healthy") {
+            $backendReady = $true
+            break
+        }
     } catch { }
     Start-Sleep -Seconds 1
 }
-if ($backendOk) { Write-Host "[OK] Backend API running on http://localhost:8000" -ForegroundColor Green }
-else { Write-Warning "Backend may still be starting..." }
 
-# 2. Packet Sniffer
-Start-Sleep -Seconds 2
-Write-Host "[2/3] Starting Packet Sniffer..." -ForegroundColor Yellow
-$snifferCmd = "cd C:\Users\shari\cyber-threat-visualizer; . .venv\Scripts\Activate.ps1; python -m backend.sniffer.packet_sniffer --fallback"
-Start-Process powershell -ArgumentList "-NoExit", "-Command", $snifferCmd -Verb RunAs
-
-# 3. Frontend
-Start-Sleep -Seconds 2
-Write-Host "[3/3] Starting Frontend on http://localhost:3000..." -ForegroundColor Yellow
-$frontendCmd = "cd C:\Users\shari\cyber-threat-visualizer\frontend; npm run dev"
-Start-Process powershell -ArgumentList "-NoExit", "-Command", $frontendCmd -Verb RunAs
-
+if ($backendReady) {
+    Write-Host "[OK] Backend API running on http://localhost:8000" -ForegroundColor Green
+} else {
+    Write-Warning "Backend API may still be starting..."
+}
 Write-Host ""
+
+# WINDOW 3: Packet Sniffer
+Write-Host "[3/4] Launching Packet Sniffer..." -ForegroundColor Yellow
+$snifferScript = "$ProjectRoot\scripts\start-sniffer.ps1"
+if (-not (Test-Path $snifferScript)) {
+    Write-Error "Sniffer script not found: $snifferScript"
+    exit 1
+}
+Start-Process powershell -ArgumentList "-NoExit", "-Command", "& '$snifferScript'" -WindowStyle Normal -Verb RunAs
+
+Write-Host "[INFO] Packet Sniffer window launched" -ForegroundColor Green
+Write-Host ""
+
+# WINDOW 4: Frontend
+Write-Host "[4/4] Launching Frontend..." -ForegroundColor Yellow
+$frontendScript = "$ProjectRoot\scripts\start-frontend.ps1"
+if (-not (Test-Path $frontendScript)) {
+    Write-Error "Frontend script not found: $frontendScript"
+    exit 1
+}
+Start-Process powershell -ArgumentList "-NoExit", "-Command", "& '$frontendScript'" -WindowStyle Normal
+
+Write-Host "[INFO] Frontend window launched" -ForegroundColor Green
+Write-Host ""
+
+# Wait for frontend to start
+Write-Host "[INFO] Waiting for Frontend to start..." -ForegroundColor Yellow
+$frontendReady = $false
+for ($i = 1; $i -le 30; $i++) {
+    try {
+        $response = Invoke-WebRequest -Uri "http://localhost:3000" -ErrorAction Stop -TimeoutSec 2 -UseBasicParsing
+        if ($response.StatusCode -eq 200) {
+            $frontendReady = $true
+            break
+        }
+    } catch { }
+    Start-Sleep -Seconds 1
+}
+
+if ($frontendReady) {
+    Write-Host "[OK] Frontend running on http://localhost:3000" -ForegroundColor Green
+} else {
+    Write-Warning "Frontend may still be starting..."
+}
+Write-Host ""
+
 Write-Host "============================================================" -ForegroundColor Cyan
-Write-Host "[SUCCESS] All services starting in separate PowerShell windows!" -ForegroundColor Green
+Write-Host "[SUCCESS] All 4 service windows launched!" -ForegroundColor Green
 Write-Host "============================================================" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "Access Points:" -ForegroundColor Cyan
 Write-Host "  Command Center:  http://localhost:3000" -ForegroundColor Cyan
 Write-Host "  API Docs:        http://localhost:8000/docs" -ForegroundColor Cyan
+Write-Host "  Health Check:    http://localhost:8000/health" -ForegroundColor Cyan
 Write-Host "  Live Stats:      http://localhost:8000/api/v1/stats" -ForegroundColor Cyan
 Write-Host "  WebSocket:       ws://localhost:8000/ws/live" -ForegroundColor Cyan
 Write-Host ""
-Write-Host "Press Ctrl+C in each window to stop services." -ForegroundColor Yellow
+Write-Host "Window Order:" -ForegroundColor Cyan
+Write-Host "  1. Docker Infrastructure Monitor" -ForegroundColor White
+Write-Host "  2. Backend API" -ForegroundColor White
+Write-Host "  3. Packet Sniffer" -ForegroundColor White
+Write-Host "  4. Frontend" -ForegroundColor White
 Write-Host ""
-Write-Host "Services are running in separate windows. Close this window when done." -ForegroundColor Yellow
-Write-Host "Check the other PowerShell windows for service logs."
+Write-Host "Press Ctrl+C in each service window to stop services." -ForegroundColor Yellow
+Write-Host "Use .\scripts\stop-all.ps1 to stop all services cleanly." -ForegroundColor Yellow
+Write-Host ""
+Write-Host "This launcher window can be closed. Services run in their own windows." -ForegroundColor Yellow
