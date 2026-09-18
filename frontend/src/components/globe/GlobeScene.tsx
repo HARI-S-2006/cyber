@@ -1,6 +1,8 @@
 import { useFrame, useThree } from '@react-three/fiber'
-import { useMemo, useRef, useEffect, Suspense } from 'react'
+import { useMemo, useRef, useEffect } from 'react'
 import * as THREE from 'three'
+import { OrbitControls, Stars } from '@react-three/drei'
+import { EffectComposer, Bloom } from '@react-three/postprocessing'
 import { useStore } from '../../hooks/useStore'
 
 const EARTH_RADIUS = 50
@@ -15,30 +17,6 @@ function latLonToVector3(lat: number, lon: number, radius: number = EARTH_RADIUS
     radius * Math.cos(phi),
     radius * Math.sin(phi) * Math.sin(theta)
   )
-}
-
-function createArcGeometry(
-  start: THREE.Vector3,
-  end: THREE.Vector3,
-  height: number = ARC_HEIGHT,
-  color: THREE.Color = new THREE.Color(0x39FF14)
-): THREE.Line {
-  const mid = new THREE.Vector3().addVectors(start, end).multiplyScalar(0.5)
-  const midLength = mid.length()
-  mid.normalize().multiplyScalar(EARTH_RADIUS + height)
-  
-  const curve = new THREE.QuadraticBezierCurve3(start, mid, end)
-  const points = curve.getPoints(32)
-  
-  const geometry = new THREE.BufferGeometry().setFromPoints(points)
-  const material = new THREE.LineBasicMaterial({
-    color,
-    transparent: true,
-    opacity: 0.8,
-    linewidth: 2,
-  })
-  
-  return new THREE.Line(geometry, material)
 }
 
 function ThreatArc({ 
@@ -74,9 +52,9 @@ function ThreatArc({
   const material = useMemo(() => new THREE.LineBasicMaterial({
     color,
     transparent: true,
-    opacity: 0.7 * intensity,
-    linewidth: 2,
-  }), [color, intensity])
+    opacity: 0.8,
+    linewidth: 3,
+  }), [color])
   
   // Initialize the line
   useEffect(() => {
@@ -89,19 +67,13 @@ function ThreatArc({
   useFrame(({ clock }) => {
     if (!lineRef.current) return
     
+    // Create a laser pulse effect traveling along the arc
     const p = Math.min(1, (clock.getElapsedTime() * 0.5) % 1)
-    const positions = geometry.attributes.position.array
+    const positions = geometry.attributes.position.array as Float32Array
     
-    for (let i = 0; i <= 32; i++) {
-      const t = i / 32
-      if (t <= p) {
-        positions[i * 3] = points[i].x
-        positions[i * 3 + 1] = points[i].y
-        positions[i * 3 + 2] = points[i].z
-      } else {
-        positions[i * 3] = positions[i * 3 + 1] = positions[i * 3 + 2] = 0
-      }
-    }
+    // We update the draw range to simulate a beam shooting across
+    const drawPoints = Math.floor(p * 32)
+    geometry.setDrawRange(0, drawPoints)
     
     geometry.attributes.position.needsUpdate = true
   })
@@ -109,174 +81,97 @@ function ThreatArc({
   return lineRef.current ? <primitive object={lineRef.current} /> : null
 }
 
-function ParticleField() {
-  const particlesRef = useRef<THREE.Points | null>(null)
-  const count = 2000
+function CyberEarth({ isUnderAttack }: { isUnderAttack: boolean }) {
+  const earthRef = useRef<THREE.Mesh>(null)
+  const wireframeRef = useRef<THREE.Mesh>(null)
+  
+  const targetColor = useMemo(() => new THREE.Color(isUnderAttack ? 0xFF0033 : 0x00FF41), [isUnderAttack])
+  const coreTargetColor = useMemo(() => new THREE.Color(isUnderAttack ? 0x220005 : 0x020813), [isUnderAttack])
+  
+  useFrame(({ clock }) => {
+    if (earthRef.current) {
+      earthRef.current.rotation.y = clock.getElapsedTime() * 0.05
+      const material = earthRef.current.material as THREE.MeshBasicMaterial
+      material.color.lerp(coreTargetColor, 0.05)
+    }
+    if (wireframeRef.current) {
+      wireframeRef.current.rotation.y = clock.getElapsedTime() * 0.05
+      const material = wireframeRef.current.material as THREE.MeshBasicMaterial
+      material.color.lerp(targetColor, 0.05)
+    }
+  })
+  
+  return (
+    <group>
+      {/* Solid inner core */}
+      <mesh ref={earthRef as any}>
+        <icosahedronGeometry args={[EARTH_RADIUS * 0.98, 4]} />
+        <meshBasicMaterial
+          color={0x020813}
+          transparent
+          opacity={0.9}
+        />
+      </mesh>
+      
+      {/* Glowing wireframe outer layer */}
+      <mesh ref={wireframeRef as any}>
+        <icosahedronGeometry args={[EARTH_RADIUS, 4]} />
+        <meshBasicMaterial
+          color={0x00FF41}
+          wireframe
+          transparent
+          opacity={0.3}
+        />
+      </mesh>
+    </group>
+  )
+}
+
+function DataNodes() {
+  const nodesRef = useRef<THREE.Points>(null)
+  const count = 1000
   
   useEffect(() => {
     const positions = new Float32Array(count * 3)
-    const sizes = new Float32Array(count)
-    const colors = new Float32Array(count * 3)
-    const alphas = new Float32Array(count)
-    
     for (let i = 0; i < count; i++) {
-      const radius = EARTH_RADIUS + 50 + Math.random() * 100
+      const radius = EARTH_RADIUS + Math.random() * 20
       const phi = Math.acos(2 * Math.random() - 1)
       const theta = 2 * Math.PI * Math.random()
       
       positions[i * 3] = radius * Math.sin(phi) * Math.cos(theta)
       positions[i * 3 + 1] = radius * Math.cos(phi)
       positions[i * 3 + 2] = radius * Math.sin(phi) * Math.sin(theta)
-      
-      sizes[i] = Math.random() * 2 + 0.5
-      colors[i * 3] = 0
-      colors[i * 3 + 1] = 0.8 + Math.random() * 0.2
-      colors[i * 3 + 2] = 1
-      alphas[i] = Math.random() * 0.5 + 0.1
     }
     
     const geometry = new THREE.BufferGeometry()
     geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))
-    geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1))
-    geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3))
-    geometry.setAttribute('alpha', new THREE.BufferAttribute(alphas, 1))
     
     const material = new THREE.PointsMaterial({
-      size: 1.5,
-      vertexColors: true,
+      color: 0x00FFFF,
+      size: 0.5,
       transparent: true,
-      opacity: 0.6,
-      sizeAttenuation: true,
-      depthWrite: false,
+      opacity: 0.8,
       blending: THREE.AdditiveBlending,
     })
     
-    const particles = new THREE.Points(geometry, material)
-    particlesRef.current = particles
-    
-    return () => {
-      geometry.dispose()
-      material.dispose()
+    if (nodesRef.current) {
+      nodesRef.current.geometry = geometry
+      nodesRef.current.material = material
     }
   }, [])
   
   useFrame(({ clock }) => {
-    if (!particlesRef.current) return
-    
-    const positions = particlesRef.current.geometry.attributes.position.array
-    const alphas = particlesRef.current.geometry.attributes.alpha.array
-    const time = clock.getElapsedTime()
-    
-    for (let i = 0; i < count; i++) {
-      positions[i * 3 + 1] += Math.sin(time + i) * 0.02
-      alphas[i] = 0.1 + Math.sin(time * 2 + i) * 0.05
-    }
-    
-    particlesRef.current.geometry.attributes.position.needsUpdate = true
-    particlesRef.current.geometry.attributes.alpha.needsUpdate = true
-    const mat = particlesRef.current.material as THREE.PointsMaterial
-    mat.opacity = 0.6
-  })
-  
-  return <points ref={particlesRef} />
-}
-
-function Earth() {
-  const earthRef = useRef<THREE.Mesh<THREE.SphereGeometry, THREE.MeshStandardMaterial> | null>(null)
-  const atmosphereRef = useRef<THREE.Mesh | null>(null)
-  
-  useEffect(() => {
-    const loader = new THREE.TextureLoader()
-    const onError = (err: ErrorEvent) => {
-      console.warn('Texture failed to load:', err)
-    }
-    
-    loader.load('/textures/earth_day.jpg', (texture) => {
-      texture.colorSpace = THREE.SRGBColorSpace
-      if (earthRef.current) {
-        earthRef.current.material.map = texture
-        earthRef.current.material.needsUpdate = true
-      }
-    }, undefined, onError)
-    
-    loader.load('/textures/earth_night.jpg', (texture) => {
-      texture.colorSpace = THREE.SRGBColorSpace
-      if (earthRef.current) {
-        earthRef.current.material.emissiveMap = texture
-        earthRef.current.material.emissive = new THREE.Color(0x332211)
-        earthRef.current.material.emissiveIntensity = 0.5
-        earthRef.current.material.needsUpdate = true
-      }
-    }, undefined, onError)
-    
-    loader.load('/textures/earth_specular.jpg', (texture) => {
-      texture.colorSpace = THREE.SRGBColorSpace
-      if (earthRef.current) {
-        // For MeshStandardMaterial, use roughnessMap instead of specularMap
-        earthRef.current.material.roughnessMap = texture
-        earthRef.current.material.needsUpdate = true
-      }
-    }, undefined, onError)
-    
-    loader.load('/textures/earth_clouds.jpg', (texture) => {
-      texture.colorSpace = THREE.SRGBColorSpace
-      texture.wrapS = THREE.RepeatWrapping
-      texture.wrapT = THREE.RepeatWrapping
-      
-      const cloudMesh = new THREE.Mesh(
-        new THREE.SphereGeometry(EARTH_RADIUS + 2, 64, 64),
-        new THREE.MeshStandardMaterial({
-          map: texture,
-          transparent: true,
-          opacity: 0.4,
-          side: THREE.DoubleSide,
-          depthWrite: false,
-        })
-      )
-      earthRef.current?.add(cloudMesh)
-    }, undefined, onError)
-    
-    return () => {}
-  }, [])
-  
-  useFrame(({ clock }) => {
-    if (earthRef.current) {
-      earthRef.current.rotation.y = clock.getElapsedTime() * 0.02
-    }
-    if (atmosphereRef.current) {
-      atmosphereRef.current.rotation.y = clock.getElapsedTime() * 0.01
+    if (nodesRef.current) {
+      nodesRef.current.rotation.y = clock.getElapsedTime() * 0.03
+      nodesRef.current.rotation.z = Math.sin(clock.getElapsedTime() * 0.01) * 0.1
     }
   })
   
-  return (
-    <>
-      <mesh ref={earthRef} receiveShadow>
-        <sphereGeometry args={[EARTH_RADIUS, 64, 64]} />
-        <meshStandardMaterial
-          color={0x1a2a4a}
-          roughness={0.8}
-          metalness={0.1}
-        />
-      </mesh>
-      
-      <mesh ref={atmosphereRef} renderOrder={1}>
-        <sphereGeometry args={[EARTH_RADIUS + 8, 64, 64]} />
-        <meshBasicMaterial
-          color={0x0088ff}
-          transparent
-          opacity={0.08}
-          side={THREE.BackSide}
-          depthWrite={false}
-        />
-      </mesh>
-      
-      <ParticleField />
-    </>
-  )
+  return <points ref={nodesRef as any} />
 }
 
 export function GlobeScene() {
-  const { threats, packets, showArcs, showThreatsOnly } = useStore()
+  const { threats, showArcs, showThreatsOnly } = useStore()
   
   const threatArcs = useMemo(() => {
     if (!showArcs || showThreatsOnly) return []
@@ -297,9 +192,27 @@ export function GlobeScene() {
       }))
   }, [threats, showArcs, showThreatsOnly])
   
+  const isUnderAttack = useMemo(() => {
+    if (threats.length === 0) return false;
+    const latestTimestamp = threats[0].timestamp;
+    return (Date.now() / 1000 - latestTimestamp) < 15;
+  }, [threats])
+
   return (
     <>
-      <Earth />
+      <OrbitControls 
+        enablePan={false} 
+        enableZoom={true} 
+        minDistance={60} 
+        maxDistance={300}
+        autoRotate={true}
+        autoRotateSpeed={0.5}
+      />
+      
+      <Stars radius={100} depth={50} count={5000} factor={4} saturation={0} fade speed={1} />
+      
+      <CyberEarth isUnderAttack={isUnderAttack} />
+      <DataNodes />
       
       {threatArcs.map((arc, i) => (
         <ThreatArc
@@ -313,6 +226,15 @@ export function GlobeScene() {
           intensity={arc.intensity}
         />
       ))}
+
+      <EffectComposer>
+        <Bloom 
+          luminanceThreshold={0.2} 
+          luminanceSmoothing={0.9} 
+          intensity={1.5} 
+          mipmapBlur 
+        />
+      </EffectComposer>
     </>
   )
 }
