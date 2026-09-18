@@ -9,6 +9,7 @@ import { SidePanel } from './components/ui/SidePanel'
 import { useWebSocket } from './hooks/useWebSocket'
 import { useStore } from './hooks/useStore'
 import { useEffect } from 'react'
+import { ErrorBoundary } from './components/ErrorBoundary'
 
 function App() {
   const { connected, threats, stats, setThreats, setStats, setConnected } = useStore()
@@ -53,20 +54,22 @@ function App() {
         {/* Center - 3D Globe */}
         <main className="flex-1 relative">
           <div className="absolute inset-0 z-0">
-            <Canvas
-              camera={{ position: [0, 0, 200], fov: 50 }}
-              gl={{ antialias: true, alpha: true, preserveDrawingBuffer: false }}
-              style={{ width: '100%', height: '100%' }}
-            >
-              <color attach="background" args={['#000000']} />
-              <fog attach="fog" args={['#000000', 100, 500]} />
-              
-              <ambientLight intensity={0.3} color="#39FF14" />
-              <directionalLight position={[200, 200, 200]} intensity={1.5} color="#ffffff" castShadow />
-              <pointLight position={[0, 0, 0]} color="#39FF14" intensity={0.5} distance={300} decay={2} />
-              
-              <GlobeScene />
-            </Canvas>
+            <ErrorBoundary>
+              <Canvas
+                camera={{ position: [0, 0, 200], fov: 50 }}
+                gl={{ antialias: true, alpha: true, preserveDrawingBuffer: false }}
+                style={{ width: '100%', height: '100%' }}
+              >
+                <color attach="background" args={['#000000']} />
+                <fog attach="fog" args={['#000000', 100, 500]} />
+                
+                <ambientLight intensity={0.3} color="#39FF14" />
+                <directionalLight position={[200, 200, 200]} intensity={1.5} color="#ffffff" castShadow />
+                <pointLight position={[0, 0, 0]} color="#39FF14" intensity={0.5} distance={300} decay={2} />
+                
+                <GlobeScene />
+              </Canvas>
+            </ErrorBoundary>
           </div>
 
           {/* Top Bar */}
