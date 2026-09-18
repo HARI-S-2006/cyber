@@ -13,6 +13,7 @@ from backend.config import settings
 from backend.utils.redis_client import redis_manager
 from backend.api.routes import router
 from backend.api.websocket import ws_manager
+from backend.api.simulation import router as simulation_router
 from backend.ml.model import detection_service
 from backend.sniffer.geoip_cache import geoip_cache
 
@@ -93,6 +94,7 @@ def create_app() -> FastAPI:
     
     # Include API routes
     app.include_router(router, prefix="/api/v1")
+    app.include_router(simulation_router, prefix="/api/v1")
     
     # WebSocket endpoint
     @app.websocket("/ws/live")

@@ -94,6 +94,7 @@ class FlowFeatures(BaseModel):
     threat_score: float = 0.0
     threat_type: str = "UNKNOWN"
     threat_details: dict = {}
+    source_mode: str = "REAL_LOCAL"
 
 
 class FlowFeaturesResponse(FlowFeatures):
@@ -119,6 +120,7 @@ class ThreatEvent(BaseModel):
     dst_lon: float = 0.0
     src_country: str = "Unknown"
     dst_country: str = "Unknown"
+    source_mode: str = "REAL_LOCAL"
 
 
 class ThreatEventResponse(ThreatEvent):

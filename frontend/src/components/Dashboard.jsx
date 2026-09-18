@@ -11,6 +11,8 @@ import Sidebar from './Sidebar'
 import Toolbar from './Toolbar'
 import ConnectionStatus from './ConnectionStatus'
 import { ErrorBoundary } from './ErrorBoundary'
+import { AttackConsole } from './dashboard/AttackConsole'
+import { ThreatMatrix } from './dashboard/ThreatMatrix'
 
 export default function Dashboard() {
   const { connected, connecting, activeTab, sidebarOpen, setActiveTab, setSidebarOpen } = useStore()
@@ -69,6 +71,9 @@ function GlobeView() {
       <div className="absolute top-4 right-4 z-10 flex gap-2">
         <StatsPanel stats={dashboardStats} />
       </div>
+      
+      <AttackConsole />
+      <ThreatMatrix />
       
       <div className="absolute bottom-4 left-4 z-10 flex gap-2 flex-wrap max-w-[400px]">
         {globeData?.arcs?.slice(0, 5).map((arc, i) => (

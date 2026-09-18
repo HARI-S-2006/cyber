@@ -18,7 +18,7 @@ def main():
     parser.add_argument("--redis", default="redis://localhost:6379/0", help="Redis URL")
     parser.add_argument("--rate", type=int, default=10, help="Events per second")
     parser.add_argument("--duration", type=int, default=30, help="Duration in seconds")
-    parser.add_argument("--type", choices=["syn", "udp", "http"], default="syn", help="Attack type")
+    parser.add_argument("--type", choices=["syn", "udp", "http", "icmp", "portscan", "bruteforce"], default="syn", help="Attack type")
     
     args = parser.parse_args()
     
@@ -40,11 +40,31 @@ def main():
     msg_count = 0
     delay = 1.0 / args.rate
     
+    port_scan_current = 1
+    
     try:
         while time.time() < end_time:
             now = time.time()
             src_ip = generate_random_ip()
             src_lat, src_lon = generate_coordinates()
+            
+            dst_port = 443
+            protocol = "TCP"
+            threat_type = f"{args.type.upper()}_FLOOD"
+            
+            if args.type == "http":
+                dst_port = 80
+            elif args.type == "udp":
+                protocol = "UDP"
+            elif args.type == "icmp":
+                protocol = "ICMP"
+            elif args.type == "portscan":
+                dst_port = port_scan_current
+                port_scan_current = (port_scan_current % 65535) + 1
+                threat_type = "PORT_SCAN"
+            elif args.type == "bruteforce":
+                dst_port = 22
+                threat_type = "BRUTE_FORCE"
             
             # Generate Flow Feature
             flow = {
@@ -52,11 +72,12 @@ def main():
                 "src_ip": src_ip,
                 "dst_ip": target_ip,
                 "src_port": random.randint(1024, 65535),
-                "dst_port": 80 if args.type == "http" else 443,
-                "protocol": "TCP" if args.type in ["syn", "http"] else "UDP",
+                "dst_port": dst_port,
+                "protocol": protocol,
                 "bytes_total": random.randint(40, 1500),
                 "start_time": now,
-                "length": random.randint(40, 1500)
+                "length": random.randint(40, 1500),
+                "source_mode": "SYNTHETIC"
             }
             r.publish("network:features", json.dumps(flow))
             
@@ -64,7 +85,7 @@ def main():
             if random.random() > 0.3: # 70% of traffic is flagged as anomalous
                 threat = {
                     "anomaly": True,
-                    "threat_type": f"{args.type.upper()}_FLOOD",
+                    "threat_type": threat_type,
                     "threat_score": random.uniform(0.7, 0.99),
                     "threat_level": "HIGH" if random.random() > 0.1 else "CRITICAL",
                     "src_ip": src_ip,
@@ -74,7 +95,8 @@ def main():
                     "dst_lat": target_lat,
                     "dst_lon": target_lon,
                     "timestamp": now,
-                    "features": flow
+                    "features": flow,
+                    "source_mode": "SYNTHETIC"
                 }
                 r.publish("network:threats", json.dumps(threat))
             

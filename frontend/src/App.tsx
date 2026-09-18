@@ -6,6 +6,7 @@ import { SystemStatus } from './components/hud/SystemStatus'
 import { ThreatAlert } from './components/hud/ThreatAlert'
 import { TopBar } from './components/ui/TopBar'
 import { SidePanel } from './components/ui/SidePanel'
+import { AttackConsole } from './components/dashboard/AttackConsole'
 import { useWebSocket } from './hooks/useWebSocket'
 import { useStore } from './hooks/useStore'
 import { useEffect } from 'react'
@@ -74,6 +75,9 @@ function App() {
 
           {/* Top Bar */}
           <TopBar />
+
+          {/* Attack Console overlay */}
+          <AttackConsole />
 
           {/* Bottom Status Bar */}
           <div className="absolute bottom-0 left-0 right-0 panel border-t border-cyber-panelBorder px-4 py-2">

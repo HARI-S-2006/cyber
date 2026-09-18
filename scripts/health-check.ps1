@@ -14,15 +14,15 @@ Write-Host "   CYBER THREAT VISUALIZER - HEALTH CHECK" -ForegroundColor Cyan
 Write-Host "============================================================"
 Write-Host ""
 
-$results = @()
+$script:results = New-Object System.Collections.ArrayList
 
 function Add-Result {
     param($Service, $Status, $Detail)
-    $global:results += [PSCustomObject]@{
+    [void]$script:results.Add([PSCustomObject]@{
         Service = $Service
         Status  = $Status
         Detail  = $Detail
-    }
+    })
 }
 
 # 1. Docker
